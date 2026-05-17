@@ -26,38 +26,6 @@ Project Genesis is a **bottom-up** universal simulation running entirely in the 
 - 🧬 Universal Phylogenetic Registry
 - ⚖️ Emergent Governance System
 
-## Quick Start
-
-```bash
-npm install
-npm run dev
-```
-
-Then open `http://localhost:5173/genesis/` in your browser.
-
-## Build & Deploy
-
-This project uses **Vite** and requires a build step before it can be served on GitHub Pages. You cannot just serve the raw source code.
-
-### Local Development
-```bash
-npm install
-npm run dev
-```
-Then open `http://localhost:5173/genesis/` in your browser.
-
-### Fixing GitHub Pages Deployment
-Currently, if you see a broken page with unstyled text at `https://marcorzzn.github.io/genesis/`, it means GitHub is serving the raw, uncompiled source code instead of the compiled `dist/` folder.
-
-To fix this and enable the automatic deployment pipeline we set up:
-1. Go to your repository on GitHub.
-2. Click on the ⚙️ **Settings** tab.
-3. In the left sidebar, click on **Pages**.
-4. Under **Build and deployment**, locate the **Source** dropdown.
-5. Change it from *Deploy from a branch* to **GitHub Actions**.
-
-Once you make this change, GitHub will automatically trigger the custom `Deploy to GitHub Pages` action we created, which will build the project using Vite and deploy the highly optimized `dist/` folder.
-
 ## Features
 
 - **WebGL2 GPGPU** substrate with 3 modes: Game of Life, Reaction-Diffusion, GPU Particles
