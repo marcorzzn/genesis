@@ -1,0 +1,26 @@
+{
+  "name": "project-genesis",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Genesis — Universal Emergence Simulation: From quantum cellular automata to sentient multi-agent civilizations",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "d3": "^7.9.0",
+    "chart.js": "^4.4.4",
+    "gl-matrix": "^3.4.3",
+    "simplex-noise": "^4.0.3",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "vitest": "^3.2.1"
+  }
+}

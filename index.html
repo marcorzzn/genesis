@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Project Genesis — Universal Emergence Simulation: from cellular automata to sentient civilizations">
+  <title>Project Genesis — Universal Emergence Simulation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌌</text></svg>">
+</head>
+<body>
+  <div id="app">
+    <!-- Top Bar -->
+    <header id="top-bar">
+      <div class="top-bar__left">
+        <h1 class="logo">
+          <span class="logo__icon">🌌</span>
+          <span class="logo__text">GENESIS</span>
+        </h1>
+      </div>
+      <div class="top-bar__center" id="status-bar">
+        <div class="status-item" id="status-fps"><span class="status-label">FPS</span><span class="status-value" id="fps-value">60</span></div>
+        <div class="status-item" id="status-tick"><span class="status-label">Tick</span><span class="status-value" id="tick-value">0</span></div>
+        <div class="status-item" id="status-entities"><span class="status-label">Entities</span><span class="status-value" id="entities-value">0</span></div>
+        <div class="status-item" id="status-agents"><span class="status-label">Agents</span><span class="status-value" id="agents-value">0</span></div>
+        <div class="status-item" id="status-species"><span class="status-label">Species</span><span class="status-value" id="species-value">0</span></div>
+      </div>
+      <div class="top-bar__right">
+        <select id="language-select" class="control-select">
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇬🇧 English</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- Main Layout: 3 Columns -->
+    <main id="main-layout">
+      <!-- Left Column: Control Panel -->
+      <aside id="panel-left" class="panel">
+        <div class="panel__header">
+          <h2 class="panel__title" data-i18n="control_panel.title">Pannello di Controllo Divino</h2>
+        </div>
+        <div class="panel__body" id="control-panel-body">
+          <!-- Simulation Controls -->
+          <div class="control-group">
+            <div class="control-buttons">
+              <button id="btn-play" class="btn btn--primary" data-i18n="control_panel.play">▶ Avvia</button>
+              <button id="btn-pause" class="btn btn--secondary" data-i18n="control_panel.pause">⏸ Pausa</button>
+              <button id="btn-reset" class="btn btn--danger" data-i18n="control_panel.reset">↺ Ripristina</button>
+            </div>
+          </div>
+
+          <!-- Speed Control -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.sim_speed">Velocità Simulazione</label>
+            <input type="range" id="slider-speed" class="control-slider" min="0.1" max="10" step="0.1" value="1">
+            <span class="control-value" id="speed-value">1.0x</span>
+          </div>
+
+          <!-- Substrate Mode -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.substrate_mode">Modalità Substrato</label>
+            <select id="substrate-mode" class="control-select">
+              <option value="0" data-i18n="control_panel.mode_gol">Gioco della Vita</option>
+              <option value="1" selected data-i18n="control_panel.mode_rd">Reazione-Diffusione</option>
+              <option value="2" data-i18n="control_panel.mode_particles">Particelle GPU</option>
+            </select>
+          </div>
+
+          <!-- Physics Constants -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.feed_rate">Tasso Alimentazione (F)</label>
+            <input type="range" id="slider-feed" class="control-slider" min="0.01" max="0.08" step="0.001" value="0.037">
+            <span class="control-value" id="feed-value">0.037</span>
+          </div>
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.kill_rate">Tasso Rimozione (k)</label>
+            <input type="range" id="slider-kill" class="control-slider" min="0.04" max="0.07" step="0.001" value="0.06">
+            <span class="control-value" id="kill-value">0.060</span>
+          </div>
+
+          <!-- Mutation Rate -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.mutation_rate">Tasso di Mutazione</label>
+            <input type="range" id="slider-mutation" class="control-slider" min="0.01" max="0.5" step="0.01" value="0.1">
+            <span class="control-value" id="mutation-value">0.10</span>
+          </div>
+
+          <!-- Climate Intensity -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.climate_intensity">Intensità Climatica</label>
+            <input type="range" id="slider-climate" class="control-slider" min="0" max="2" step="0.1" value="1">
+            <span class="control-value" id="climate-value">1.0</span>
+          </div>
+
+          <!-- Manual Intervention -->
+          <div class="control-group">
+            <label class="control-label" data-i18n="control_panel.manual_intervention">Intervento Manuale</label>
+            <div class="control-buttons">
+              <button id="btn-inject" class="btn btn--accent" data-i18n="control_panel.inject_energy">⚡ Energia</button>
+              <button id="btn-spawn" class="btn btn--accent" data-i18n="control_panel.spawn_entity">🧬 Entità</button>
+            </div>
+          </div>
+
+          <!-- Persistence -->
+          <div class="control-group">
+            <div class="control-buttons">
+              <button id="btn-save" class="btn btn--secondary" data-i18n="control_panel.save_state">💾 Salva</button>
+              <button id="btn-load" class="btn btn--secondary" data-i18n="control_panel.load_state">📂 Carica</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center: Main Viewport -->
+      <section id="viewport-container">
+        <canvas id="substrate-canvas" width="800" height="600"></canvas>
+        <canvas id="entity-canvas" width="800" height="600"></canvas>
+        <canvas id="world-canvas" width="800" height="600"></canvas>
+        <div id="viewport-overlay">
+          <div id="minimap"></div>
+          <div id="coordinates" class="overlay-info">x: 0, y: 0</div>
+          <div id="season-display" class="overlay-info">☀️ Summer</div>
+        </div>
+      </section>
+
+      <!-- Right Column: Telemetry -->
+      <aside id="panel-right" class="panel">
+        <div class="panel__header">
+          <h2 class="panel__title" data-i18n="telemetry.title">Telemetria</h2>
+        </div>
+        <div class="panel__body" id="telemetry-body">
+          <!-- Population Chart -->
+          <div class="chart-container">
+            <h3 class="chart-title" data-i18n="telemetry.population">Popolazione Totale</h3>
+            <canvas id="chart-population" height="120"></canvas>
+          </div>
+
+          <!-- Genetic Diversity -->
+          <div class="chart-container">
+            <h3 class="chart-title" data-i18n="telemetry.genetic_diversity">Diversità Genetica</h3>
+            <canvas id="chart-diversity" height="120"></canvas>
+          </div>
+
+          <!-- Professions -->
+          <div class="chart-container">
+            <h3 class="chart-title" data-i18n="telemetry.professions">Distribuzione Professioni</h3>
+            <canvas id="chart-professions" height="120"></canvas>
+          </div>
+
+          <!-- Meta-Cognition Stats -->
+          <div class="chart-container">
+            <h3 class="chart-title" data-i18n="telemetry.consciousness_index">Indice Coscienza</h3>
+            <div id="consciousness-stats" class="stat-grid">
+              <div class="stat-item"><span class="stat-label" data-i18n="telemetry.philosophical_questions">Domande Filosofiche</span><span class="stat-value" id="stat-phil-q">0</span></div>
+              <div class="stat-item"><span class="stat-label" data-i18n="telemetry.belief_revisions">Revisioni Credenze</span><span class="stat-value" id="stat-belief-rev">0</span></div>
+            </div>
+          </div>
+
+          <!-- Chronicles -->
+          <div class="chart-container chronicles-container">
+            <h3 class="chart-title" data-i18n="chronicles.title">Cronache dell'Universo</h3>
+            <div id="chronicles-filters" class="filter-bar">
+              <button class="filter-btn active" data-filter="all" data-i18n="chronicles.filter_all">Tutti</button>
+              <button class="filter-btn" data-filter="foundation" data-i18n="chronicles.filter_foundation">Fondazioni</button>
+              <button class="filter-btn" data-filter="discovery" data-i18n="chronicles.filter_discovery">Scoperte</button>
+              <button class="filter-btn" data-filter="divine" data-i18n="chronicles.filter_divine">Divini</button>
+            </div>
+            <div id="chronicles-log" class="chronicles-log"></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Entity Inspector (overlay, shown on click) -->
+    <div id="entity-inspector" class="inspector-panel" hidden>
+      <div class="inspector-header">
+        <h3 data-i18n="inspector.title">Ispettore Entità</h3>
+        <button id="inspector-close" class="btn btn--icon">✕</button>
+      </div>
+      <div id="inspector-body" class="inspector-body">
+        <p data-i18n="inspector.no_selection">Clicca su un'entità per ispezionarla</p>
+      </div>
+    </div>
+
+    <!-- Ethical Protocol Modal -->
+    <div id="ethical-modal" class="modal-overlay" hidden>
+      <div class="modal">
+        <div class="modal__header modal__header--danger">
+          <h2 data-i18n="ethical.title">Protocollo Etico di Spegnimento</h2>
+        </div>
+        <div class="modal__body" id="ethical-modal-body"></div>
+        <div class="modal__footer">
+          <input type="text" id="ethical-confirm-input" class="control-input" placeholder="CONFERMA">
+          <button id="btn-ethical-cancel" class="btn btn--secondary" data-i18n="ethical.cancel">Annulla</button>
+          <button id="btn-ethical-confirm" class="btn btn--danger" data-i18n="ethical.confirm">Conferma</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
