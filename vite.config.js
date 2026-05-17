@@ -18,7 +18,7 @@ export default defineConfig({
     format: 'es'
   },
   test: {
-    environment: 'jsdom',
+    environment: 'node',
     globals: true
   }
 });

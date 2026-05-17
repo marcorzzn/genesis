@@ -20,8 +20,15 @@ export const FRAG_GAME_OF_LIFE = `#version 300 es
 precision highp float;
 uniform sampler2D u_state;
 uniform vec2 u_resolution;
+uniform int u_birthMask;
+uniform int u_survivalMask;
+uniform float u_decay;
 in vec2 v_uv;
 out vec4 fragColor;
+
+bool hasRule(int mask, int neighbors) {
+  return (mask & (1 << neighbors)) != 0;
+}
 
 void main() {
   vec2 px = 1.0 / u_resolution;
@@ -33,14 +40,14 @@ void main() {
       sum += texture(u_state, neighbor).r;
     }
   }
-  float self = texture(u_state, v_uv).r;
-  float alive = 0.0;
-  if (self > 0.5) {
-    alive = (sum >= 2.0 && sum <= 3.0) ? 1.0 : 0.0;
-  } else {
-    alive = (sum >= 2.5 && sum <= 3.5) ? 1.0 : 0.0;
-  }
-  fragColor = vec4(alive, alive * 0.8, alive * 0.3, 1.0);
+  vec4 current = texture(u_state, v_uv);
+  float self = current.r;
+  int neighbors = int(sum + 0.5);
+  bool survives = self > 0.5 && hasRule(u_survivalMask, neighbors);
+  bool born = self <= 0.5 && hasRule(u_birthMask, neighbors);
+  float alive = (survives || born) ? 1.0 : 0.0;
+  float age = alive > 0.5 ? min(1.0, current.g + 0.045) : max(0.0, current.g - u_decay);
+  fragColor = vec4(alive, age, float(neighbors) / 8.0, 1.0);
 }`;
 
 /** Gray-Scott reaction-diffusion fragment shader */
@@ -146,9 +153,14 @@ void main() {
   vec4 data = texture(u_state, v_uv);
 
   if (u_mode == 0) {
-    // Game of Life: cyan-teal glow
+    // Game of Life: age and neighborhood-aware glow
     float v = data.r;
-    vec3 col = mix(vec3(0.02, 0.03, 0.05), vec3(0.1, 0.9, 0.7), v);
+    float age = data.g;
+    float neighborhood = data.b;
+    vec3 young = vec3(0.16, 0.85, 0.66);
+    vec3 old = vec3(0.96, 0.78, 0.28);
+    vec3 col = mix(vec3(0.018, 0.026, 0.04), mix(young, old, age), max(v, age * 0.45));
+    col += neighborhood * vec3(0.02, 0.07, 0.11);
     fragColor = vec4(col, 1.0);
   } else if (u_mode == 1) {
     // Reaction-Diffusion: chemical gradient coloring

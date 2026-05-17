@@ -5,12 +5,12 @@
   "type": "module",
   "description": "Genesis — Universal Emergence Simulation: From quantum cellular automata to sentient multi-agent civilizations",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "vite --configLoader runner",
+    "build": "vite build --configLoader runner",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest run --configLoader runner --passWithNoTests",
+    "test:watch": "vitest --configLoader runner",
+    "test:coverage": "vitest run --configLoader runner --coverage --passWithNoTests"
   },
   "dependencies": {
     "d3": "^7.9.0",

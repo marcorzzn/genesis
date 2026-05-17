@@ -25,6 +25,7 @@
         <div class="status-item" id="status-entities"><span class="status-label">Entities</span><span class="status-value" id="entities-value">0</span></div>
         <div class="status-item" id="status-agents"><span class="status-label">Agents</span><span class="status-value" id="agents-value">0</span></div>
         <div class="status-item" id="status-species"><span class="status-label">Species</span><span class="status-value" id="species-value">0</span></div>
+        <div class="status-item" id="status-emergence"><span class="status-label">Emergence</span><span class="status-value" id="emergence-value">0.0</span></div>
       </div>
       <div class="top-bar__right">
         <select id="language-select" class="control-select">
@@ -54,7 +55,7 @@
           <!-- Speed Control -->
           <div class="control-group">
             <label class="control-label" data-i18n="control_panel.sim_speed">Velocità Simulazione</label>
-            <input type="range" id="slider-speed" class="control-slider" min="0.1" max="10" step="0.1" value="1">
+            <input type="range" id="slider-speed" class="control-slider" min="0.1" max="25" step="0.1" value="1">
             <span class="control-value" id="speed-value">1.0x</span>
           </div>
 
@@ -66,6 +67,31 @@
               <option value="1" selected data-i18n="control_panel.mode_rd">Reazione-Diffusione</option>
               <option value="2" data-i18n="control_panel.mode_particles">Particelle GPU</option>
             </select>
+          </div>
+
+          <!-- Super Game of Life -->
+          <div class="control-group control-group--framed">
+            <label class="control-label">Super Game of Life</label>
+            <select id="life-rule" class="control-select">
+              <option value="B3/S23">Conway B3/S23</option>
+              <option value="B36/S23">HighLife B36/S23</option>
+              <option value="B2/S">Seeds B2/S</option>
+              <option value="B34/S34">34 Life B34/S34</option>
+              <option value="B3678/S34678">Day & Night</option>
+              <option value="B1/S1">Gnarl B1/S1</option>
+            </select>
+            <select id="life-pattern" class="control-select control-select--stacked">
+              <option value="random">Campo casuale</option>
+              <option value="glider">Glider</option>
+              <option value="rPentomino">R-pentomino</option>
+              <option value="acorn">Acorn</option>
+              <option value="diehard">Diehard</option>
+              <option value="pulsar">Pulsar</option>
+              <option value="gosperGun">Gosper gun</option>
+            </select>
+            <div class="control-buttons">
+              <button id="btn-seed-life" class="btn btn--accent">Semina pattern</button>
+            </div>
           </div>
 
           <!-- Physics Constants -->
@@ -111,6 +137,13 @@
             </div>
           </div>
         </div>
+          <div class="control-group control-group--framed panel-action-strip">
+            <label class="control-label">Report scientifico</label>
+            <div class="control-buttons">
+              <button id="btn-export-pdf" class="btn btn--primary">PDF</button>
+              <button id="btn-export-json" class="btn btn--secondary">Dati</button>
+            </div>
+          </div>
       </aside>
 
       <!-- Center: Main Viewport -->
@@ -137,6 +170,12 @@
             <canvas id="chart-population" height="120"></canvas>
           </div>
 
+          <!-- Emergence Chart -->
+          <div class="chart-container">
+            <h3 class="chart-title">Indice di emergenza</h3>
+            <canvas id="chart-emergence" height="120"></canvas>
+          </div>
+
           <!-- Genetic Diversity -->
           <div class="chart-container">
             <h3 class="chart-title" data-i18n="telemetry.genetic_diversity">Diversità Genetica</h3>
@@ -156,6 +195,32 @@
               <div class="stat-item"><span class="stat-label" data-i18n="telemetry.philosophical_questions">Domande Filosofiche</span><span class="stat-value" id="stat-phil-q">0</span></div>
               <div class="stat-item"><span class="stat-label" data-i18n="telemetry.belief_revisions">Revisioni Credenze</span><span class="stat-value" id="stat-belief-rev">0</span></div>
             </div>
+          </div>
+
+          <!-- Formal Analysis -->
+          <div class="chart-container analysis-container">
+            <h3 class="chart-title">Analisi formale</h3>
+            <div class="analysis-phase">
+              <span id="analysis-phase">Nucleazione</span>
+              <strong id="analysis-score">0.0</strong>
+            </div>
+            <div id="analysis-drivers" class="driver-list"></div>
+          </div>
+
+          <!-- Civilization -->
+          <div class="chart-container">
+            <h3 class="chart-title">Civilta emergente</h3>
+            <div id="civilization-stats" class="stat-grid stat-grid--three">
+              <div class="stat-item"><span class="stat-label">Stage</span><span class="stat-value stat-value--small" id="stat-civ-stage">Substrato</span></div>
+              <div class="stat-item"><span class="stat-label">Tech</span><span class="stat-value" id="stat-tech">0</span></div>
+              <div class="stat-item"><span class="stat-label">Archivi</span><span class="stat-value" id="stat-archives">0</span></div>
+            </div>
+          </div>
+
+          <!-- Mathematical Laws -->
+          <div class="chart-container laws-container">
+            <h3 class="chart-title">Leggi matematiche attive</h3>
+            <div id="law-cards" class="law-cards"></div>
           </div>
 
           <!-- Chronicles -->

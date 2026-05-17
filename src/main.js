@@ -21,6 +21,8 @@ import { LanguageEvolution } from './core/cognition/language_evolution.js';
 import { EconomicEngine } from './core/cognition/economic_engine.js';
 import { BeliefSystem } from './core/cognition/belief_system.js';
 import { SocialStructure } from './core/cognition/social_structure.js';
+import { CivilizationEngine } from './core/cognition/civilization_engine.js';
+import { EmergenceAnalytics } from './core/analysis/emergence_analytics.js';
 import { SelfReflection } from './core/metacognition/self_reflection.js';
 import { TheoryOfMind } from './core/metacognition/theory_of_mind.js';
 import { PhilosophicalGenerator } from './core/metacognition/philosophical_generator.js';
@@ -28,6 +30,7 @@ import { Epidemic } from './subsystems/epidemiology/sir_model.js';
 import { SupplyChain } from './subsystems/supply_chain/supply_chain.js';
 import { GovernanceSystem } from './subsystems/governance/governance_system.js';
 import persistence from './utils/persistence.js';
+import { downloadGenesisReportJson, downloadGenesisReportPdf } from './utils/pdf_report.js';
 
 // ===== State =====
 let running = false, simSpeed = 1.0, tick = 0;
@@ -38,8 +41,9 @@ let substrate, genetics, phylogeny, trophicNet, nicheDyn;
 let worldGen, climate, resources, lod;
 let langEvolution, economy, beliefs, social;
 let selfReflect, tom, philGen;
-let supplyChain, governance;
-let populationChart, diversityChart, professionsChart;
+let supplyChain, governance, civilization, analytics;
+let populationChart, diversityChart, professionsChart, emergenceChart;
+let latestAnalysis = null;
 
 // ===== Init =====
 async function init() {
@@ -67,6 +71,8 @@ async function init() {
   langEvolution.createLanguage(128, 128);
   economy = new EconomicEngine();
   economy.createMarket('central');
+  economy.registerGood('central', 'food', 120, 1);
+  economy.registerGood('central', 'tools', 20, 3);
   beliefs = new BeliefSystem();
   social = new SocialStructure();
 
@@ -75,11 +81,15 @@ async function init() {
   philGen = new PhilosophicalGenerator();
   supplyChain = new SupplyChain();
   governance = new GovernanceSystem();
+  civilization = new CivilizationEngine({ seed: 777 });
+  analytics = new EmergenceAnalytics();
 
   renderWorldMap();
   setupUI();
   setupCharts();
   persistence.startAutoSave(() => serializeAll(), 5 * 60 * 1000);
+  latestAnalysis = analytics.sample(getAnalyticsContext());
+  updateAnalysisPanel(latestAnalysis);
   addChronicle('system', 'Universe initialized — all 7 layers operational');
 }
 
@@ -112,6 +122,7 @@ function simulationLoop(timestamp) {
     }
     if (lod.shouldUpdate('ecology', tick)) trophicNet.update(0.2);
     if (lod.shouldUpdate('cognition', tick)) { langEvolution.tick(); economy.updatePrices(); beliefs.tick(genetics.entities.size); }
+    if (tick % 60 === 0) civilization.tick(getAnalyticsContext());
     eventBus.flush();
   }
 
@@ -120,7 +131,9 @@ function simulationLoop(timestamp) {
   if (tick % 30 === 0) updateTelemetry();
   document.getElementById('tick-value').textContent = tick;
   document.getElementById('entities-value').textContent = genetics.entities.size;
+  document.getElementById('agents-value').textContent = social.clans.size;
   document.getElementById('species-value').textContent = genetics.species.size;
+  document.getElementById('emergence-value').textContent = latestAnalysis ? latestAnalysis.emergenceScore.toFixed(1) : '0.0';
   const seasonEmoji = { spring:'🌱', summer:'☀️', autumn:'🍂', winter:'❄️' };
   const season = climate.getCurrentSeason();
   document.getElementById('season-display').textContent = `${seasonEmoji[season]??'🌍'} ${season.charAt(0).toUpperCase()+season.slice(1)}`;
@@ -150,6 +163,23 @@ function renderWorldMap() {
   tmp.getContext('2d').putImageData(imgData, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
+  renderMiniMap(tmp);
+}
+
+function renderMiniMap(sourceCanvas) {
+  const host = document.getElementById('minimap');
+  if (!host) return;
+  let mini = host.querySelector('canvas');
+  if (!mini) {
+    mini = document.createElement('canvas');
+    host.appendChild(mini);
+  }
+  mini.width = host.clientWidth || 150;
+  mini.height = host.clientHeight || 120;
+  const mctx = mini.getContext('2d');
+  mctx.imageSmoothingEnabled = false;
+  mctx.clearRect(0, 0, mini.width, mini.height);
+  mctx.drawImage(sourceCanvas, 0, 0, mini.width, mini.height);
 }
 
 // ===== Charts =====
@@ -160,15 +190,27 @@ async function setupCharts() {
     scales: { x:{display:false}, y:{ticks:{color:'#64748b',font:{size:10}}, grid:{color:'rgba(30,41,59,0.5)'}} } };
   populationChart = new Chart(document.getElementById('chart-population'), {
     type:'line', data:{labels:[],datasets:[{data:[],borderColor:'#22d3ee',borderWidth:1.5,fill:true,backgroundColor:'rgba(34,211,238,0.1)',pointRadius:0,tension:0.3}]}, options:opts });
+  emergenceChart = new Chart(document.getElementById('chart-emergence'), {
+    type:'line', data:{labels:[],datasets:[{data:[],borderColor:'#34d399',borderWidth:1.5,fill:true,backgroundColor:'rgba(52,211,153,0.1)',pointRadius:0,tension:0.3}]}, options:opts });
   diversityChart = new Chart(document.getElementById('chart-diversity'), {
     type:'line', data:{labels:[],datasets:[{data:[],borderColor:'#a78bfa',borderWidth:1.5,fill:true,backgroundColor:'rgba(167,139,250,0.1)',pointRadius:0,tension:0.3}]}, options:opts });
+  professionsChart = new Chart(document.getElementById('chart-professions'), {
+    type:'bar',
+    data:{labels:[],datasets:[{data:[],backgroundColor:'rgba(251,191,36,0.55)',borderColor:'#fbbf24',borderWidth:1}]},
+    options:{...opts, scales:{x:{ticks:{color:'#64748b',font:{size:9}}, grid:{display:false}}, y:opts.scales.y}}
+  });
 }
 
 function updateTelemetry() {
   const stats = genetics.getPopulationStats();
+  latestAnalysis = analytics.sample(getAnalyticsContext());
   if (populationChart) {
     const d = populationChart.data; d.labels.push(tick); d.datasets[0].data.push(stats.alive);
     if (d.labels.length > 200) { d.labels.shift(); d.datasets[0].data.shift(); } populationChart.update();
+  }
+  if (emergenceChart && latestAnalysis) {
+    const d = emergenceChart.data; d.labels.push(tick); d.datasets[0].data.push(latestAnalysis.emergenceScore.toFixed(2));
+    if (d.labels.length > 200) { d.labels.shift(); d.datasets[0].data.shift(); } emergenceChart.update();
   }
   if (diversityChart) {
     const d = diversityChart.data; d.labels.push(tick);
@@ -178,7 +220,59 @@ function updateTelemetry() {
     d.datasets[0].data.push(h.toFixed(2));
     if (d.labels.length>200) { d.labels.shift(); d.datasets[0].data.shift(); } diversityChart.update();
   }
+  if (professionsChart) {
+    professionsChart.data.labels = [...economy.professions].slice(-8);
+    professionsChart.data.datasets[0].data = professionsChart.data.labels.map(() => 1);
+    professionsChart.update();
+  }
   document.getElementById('stat-phil-q').textContent = philGen.questions.length;
+  updateAnalysisPanel(latestAnalysis);
+}
+
+function getAnalyticsContext() {
+  return {
+    tick,
+    fps,
+    simSpeed,
+    substrate,
+    genetics,
+    worldGen,
+    climate,
+    resources,
+    economy,
+    beliefs,
+    social,
+    governance,
+    civilization,
+    eventBus
+  };
+}
+
+function updateAnalysisPanel(sample) {
+  if (!sample) return;
+  document.getElementById('analysis-phase').textContent = sample.phase;
+  document.getElementById('analysis-score').textContent = sample.emergenceScore.toFixed(1);
+  document.getElementById('stat-civ-stage').textContent = sample.society.stage;
+  document.getElementById('stat-tech').textContent = sample.society.technologies;
+  document.getElementById('stat-archives').textContent = sample.society.archives;
+
+  const drivers = document.getElementById('analysis-drivers');
+  drivers.innerHTML = sample.drivers.map(driver => `
+    <div class="driver-item">
+      <div class="driver-item__top"><span>${driver.label}</span><strong>${Math.round(driver.score * 100)}%</strong></div>
+      <div class="driver-meter"><span style="width:${Math.round(driver.score * 100)}%"></span></div>
+      <p>${driver.evidence}</p>
+    </div>
+  `).join('');
+
+  const cards = document.getElementById('law-cards');
+  cards.innerHTML = sample.principles.map(principle => `
+    <article class="law-card">
+      <h4>${principle.name}</h4>
+      <code>${principle.formula}</code>
+      <p>${principle.meaning}</p>
+    </article>
+  `).join('');
 }
 
 // ===== Chronicles =====
@@ -191,6 +285,77 @@ function addChronicle(type, message) {
   if (log.children.length > 100) log.removeChild(log.lastChild);
 }
 
+function setupViewportInteractions() {
+  const canvas = document.getElementById('entity-canvas');
+  const coordinates = document.getElementById('coordinates');
+  const close = document.getElementById('inspector-close');
+  canvas.addEventListener('mousemove', event => {
+    const pos = canvasToWorld(event, canvas);
+    coordinates.textContent = `x: ${pos.x.toFixed(1)}, y: ${pos.y.toFixed(1)}`;
+  });
+  canvas.addEventListener('click', event => {
+    const pos = canvasToWorld(event, canvas);
+    const entity = findNearestEntity(pos.x, pos.y, 5);
+    if (entity) showEntityInspector(entity);
+  });
+  close.addEventListener('click', () => { document.getElementById('entity-inspector').hidden = true; });
+}
+
+function canvasToWorld(event, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * worldGen.width,
+    y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * worldGen.height
+  };
+}
+
+function findNearestEntity(x, y, radius) {
+  let best = null;
+  let bestDist = radius * radius;
+  for (const entity of genetics.entities.values()) {
+    if (!entity.alive) continue;
+    const dx = entity.x - x;
+    const dy = entity.y - y;
+    const dist = dx * dx + dy * dy;
+    if (dist < bestDist) {
+      best = entity;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+function showEntityInspector(entity) {
+  const inspector = document.getElementById('entity-inspector');
+  const body = document.getElementById('inspector-body');
+  const biome = worldGen.getBiomeAt(entity.x, entity.y);
+  const resource = resources.getResourceAt(entity.x, entity.y);
+  const complexity = entity.network.getComplexity();
+  body.innerHTML = `
+    <div class="inspector-grid">
+      ${inspectorRow('ID', entity.id)}
+      ${inspectorRow('Specie', entity.speciesId)}
+      ${inspectorRow('Energia', entity.energy.toFixed(2))}
+      ${inspectorRow('Eta', entity.age.toFixed(1))}
+      ${inspectorRow('Generazione', entity.generation)}
+      ${inspectorRow('Rete NEAT', complexity)}
+      ${inspectorRow('Metabolismo', entity.metabolicRate.toFixed(3))}
+      ${inspectorRow('Risorsa locale', resource.toFixed(3))}
+      ${inspectorRow('Bioma', biome)}
+    </div>
+    <div class="inspector-explanation">
+      <h4>Interpretazione causale</h4>
+      <p>Questa entita trasforma risorse locali in energia, usa una rete NEAT per decidere movimento/riproduzione e contribuisce alla diversita di Shannon della popolazione. Se sopravvive abbastanza a lungo, la sua topologia neurale entra nelle metriche di complessita biologica.</p>
+      <code>fitness += dt*0.01 + energy*0.001</code>
+    </div>
+  `;
+  inspector.hidden = false;
+}
+
+function inspectorRow(label, value) {
+  return `<div class="inspector-row"><span>${label}</span><strong>${value}</strong></div>`;
+}
+
 // ===== UI Setup =====
 function setupUI() {
   document.getElementById('btn-play').addEventListener('click', () => { running = true; });
@@ -199,6 +364,8 @@ function setupUI() {
     running = false; tick = 0;
     genetics = new GeneticEngine({ populationCap: 5000, seed: Math.random()*10000 });
     genetics.initPopulation(200, worldGen.width, worldGen.height);
+    civilization = new CivilizationEngine({ seed: Math.random()*10000 });
+    analytics = new EmergenceAnalytics();
     if (substrate?.initialized) substrate.resetToSeed(Math.random()*10000);
     worldGen.generate(); renderWorldMap();
     addChronicle('system', 'Universe reset — new Big Bang initiated');
@@ -214,12 +381,26 @@ function setupUI() {
   bindSlider('slider-mutation','mutation-value', v => { if(genetics) genetics.mutationRates.weight=v; });
 
   document.getElementById('substrate-mode').addEventListener('change', e => { substrate?.setMode(parseInt(e.target.value)); });
+  document.getElementById('life-rule').addEventListener('change', e => {
+    substrate?.setLifeRule(e.target.value);
+    substrate?.setMode(SubstrateMode.GAME_OF_LIFE);
+    document.getElementById('substrate-mode').value = String(SubstrateMode.GAME_OF_LIFE);
+    addChronicle('discovery', `Life rule changed to ${e.target.value}`);
+  });
+  document.getElementById('btn-seed-life').addEventListener('click', () => {
+    substrate?.setMode(SubstrateMode.GAME_OF_LIFE);
+    document.getElementById('substrate-mode').value = String(SubstrateMode.GAME_OF_LIFE);
+    const pattern = document.getElementById('life-pattern').value;
+    substrate?.seedLifePattern(pattern);
+    addChronicle('discovery', `Game of Life pattern seeded: ${pattern}`);
+  });
   document.getElementById('btn-inject').addEventListener('click', () => {
     observerManager.injectEnergy(worldGen.width/2, worldGen.height/2, 500, 20);
     addChronicle('divine', '⚡ Divine energy injection at world center');
   });
   document.getElementById('btn-spawn').addEventListener('click', () => {
     observerManager.spawnEntity({}, worldGen.width/2, worldGen.height/2);
+    genetics.spawnEntity(worldGen.width/2, worldGen.height/2, { energy: 120, color: [0.2, 0.9, 0.7], size: 4 });
     addChronicle('divine', '🧬 Divine entity spawned at world center');
   });
   document.getElementById('btn-save').addEventListener('click', async () => {
@@ -230,6 +411,17 @@ function setupUI() {
     const state = await persistence.loadState();
     if (state) { deserializeAll(state); addChronicle('system', '📂 State loaded'); }
   });
+  document.getElementById('btn-export-pdf').addEventListener('click', () => {
+    const report = analytics.createReport({ windowSize: 160 });
+    downloadGenesisReportPdf(report, `genesis-report-t${tick}.pdf`);
+    addChronicle('system', `Scientific PDF report exported at T=${tick}`);
+  });
+  document.getElementById('btn-export-json').addEventListener('click', () => {
+    const report = analytics.createReport({ windowSize: 240 });
+    downloadGenesisReportJson(report, `genesis-report-t${tick}.json`);
+    addChronicle('system', `Telemetry dataset exported at T=${tick}`);
+  });
+  setupViewportInteractions();
   document.getElementById('language-select').addEventListener('change', e => setLocale(e.target.value));
   onLocaleChange(() => {
     document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
@@ -272,6 +464,10 @@ function setupUI() {
   eventBus.subscribe('beliefs.created', e => addChronicle('foundation', `⛪ ${e.payload.content.substring(0,50)}`), {layer:0,priority:5});
   eventBus.subscribe('metacognition.philosophical_question', e => addChronicle('discovery', `🧠 "${e.payload.question}"`), {layer:0,priority:5});
 
+  eventBus.subscribe('civilization.settlement_founded', e => addChronicle('foundation', `Settlement ${e.payload.name} founded with ${e.payload.population} agents`), {layer:0,priority:5});
+  eventBus.subscribe('technology.unlocked', e => addChronicle('discovery', `Technology unlocked: ${e.payload.label}`), {layer:0,priority:5});
+  eventBus.subscribe('information.archive_recorded', e => addChronicle('discovery', `Archive recorded: ${e.payload.title}`), {layer:0,priority:5});
+
   window.addEventListener('resize', renderWorldMap);
 }
 
@@ -281,7 +477,8 @@ function serializeAll() {
     phylogeny:phylogeny?.serialize(), worldGen:worldGen?.serialize(), climate:climate?.serialize(),
     lod:lod?.serialize(), langEvolution:langEvolution?.serialize(), economy:economy?.serialize(),
     beliefs:beliefs?.serialize(), social:social?.serialize(), selfReflect:selfReflect?.serialize(),
-    tom:tom?.serialize(), philGen:philGen?.serialize(), governance:governance?.serialize() };
+    tom:tom?.serialize(), philGen:philGen?.serialize(), governance:governance?.serialize(),
+    civilization:civilization?.serialize(), analytics:analytics?.serialize() };
 }
 
 function deserializeAll(state) {
@@ -294,7 +491,10 @@ function deserializeAll(state) {
   economy?.deserialize(state.economy); beliefs?.deserialize(state.beliefs);
   social?.deserialize(state.social); selfReflect?.deserialize(state.selfReflect);
   tom?.deserialize(state.tom); philGen?.deserialize(state.philGen);
-  governance?.deserialize(state.governance); renderWorldMap();
+  governance?.deserialize(state.governance); civilization?.deserialize(state.civilization);
+  analytics?.deserialize(state.analytics); latestAnalysis = analytics.latest();
+  if (latestAnalysis) updateAnalysisPanel(latestAnalysis);
+  renderWorldMap();
 }
 
 // ===== Boot =====

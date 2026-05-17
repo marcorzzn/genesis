@@ -76,6 +76,25 @@ export class GeneticEngine {
     eventBus.publish('biology.population_initialized', { count: this.entities.size }, { source_layer: 2 });
   }
 
+  /** Spawn a single entity at an explicit location. Used by observer interventions. */
+  spawnEntity(x, y, template = {}) {
+    if (this.entities.size >= this.populationCap) return null;
+    const net = template.network ?? NEATNetwork.create(this.inputCount, this.outputCount);
+    const entity = new Entity(this.nextEntityId++, x, y, net);
+    if (template.energy !== undefined) entity.energy = template.energy;
+    if (template.color) entity.color = [...template.color];
+    if (template.size !== undefined) entity.size = template.size;
+    this.entities.set(entity.id, entity);
+    this._speciate();
+    eventBus.publish('biology.entity_birth', {
+      entityId: entity.id,
+      parentId: null,
+      generation: entity.generation,
+      divine: true
+    }, { source_layer: 2, priority: 7 });
+    return entity;
+  }
+
   /** Run one simulation tick */
   tick(getInputsFn, deltaTime = 1) {
     const deadIds = [];

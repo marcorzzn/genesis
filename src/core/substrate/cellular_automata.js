@@ -7,6 +7,7 @@
 
 import eventBus from '../meta/event_bus.js';
 import * as Shaders from './shaders.glsl.js';
+import { LIFE_PATTERNS, masksFromRule } from './gol_patterns.js';
 
 /** Substrate simulation modes */
 export const SubstrateMode = { GAME_OF_LIFE: 0, REACTION_DIFFUSION: 1, PARTICLES: 2 };
@@ -39,8 +40,13 @@ export class SubstrateEngine {
     this.diffU = 0.21;
     this.diffV = 0.105;
     this.dt = 1.0;
+    this.lifeRule = 'B3/S23';
+    this.birthMask = 1 << 3;
+    this.survivalMask = (1 << 2) | (1 << 3);
+    this.lifeDecay = 0.05;
 
     this._frameCount = 0;
+    this.textureType = null;
     this._setupEventListeners();
   }
 
@@ -80,6 +86,9 @@ export class SubstrateEngine {
       prog = this.programs.gol;
       gl.useProgram(prog.program);
       gl.uniform2f(prog.uniforms.u_resolution, this.width, this.height);
+      gl.uniform1i(prog.uniforms.u_birthMask, this.birthMask);
+      gl.uniform1i(prog.uniforms.u_survivalMask, this.survivalMask);
+      gl.uniform1f(prog.uniforms.u_decay, this.lifeDecay);
     } else if (this.mode === SubstrateMode.REACTION_DIFFUSION) {
       prog = this.programs.rd;
       gl.useProgram(prog.program);
@@ -100,7 +109,8 @@ export class SubstrateEngine {
 
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.textures[src]);
-    gl.uniform1i(prog.uniforms.u_state, 0);
+    if (prog.uniforms.u_state) gl.uniform1i(prog.uniforms.u_state, 0);
+    if (prog.uniforms.u_particles) gl.uniform1i(prog.uniforms.u_particles, 0);
 
     gl.bindVertexArray(this.quadVAO);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
@@ -199,6 +209,77 @@ export class SubstrateEngine {
     if (params.diffU !== undefined) this.diffU = params.diffU;
     if (params.diffV !== undefined) this.diffV = params.diffV;
     if (params.dt !== undefined) this.dt = params.dt;
+    if (params.lifeDecay !== undefined) this.lifeDecay = params.lifeDecay;
+  }
+
+  /** Apply an extended B/S rule, e.g. B3/S23 or B36/S23. */
+  setLifeRule(rule) {
+    const parsed = masksFromRule(rule);
+    this.lifeRule = parsed.rule;
+    this.birthMask = parsed.birthMask;
+    this.survivalMask = parsed.survivalMask;
+    eventBus.publish('substrate.life_rule_changed', {
+      rule: this.lifeRule,
+      birthMask: this.birthMask,
+      survivalMask: this.survivalMask
+    }, { source_layer: 1, priority: 6 });
+  }
+
+  getLifeRule() {
+    return { rule: this.lifeRule, birthMask: this.birthMask, survivalMask: this.survivalMask };
+  }
+
+  /** Seed the GoL texture with a canonical pattern from gol_patterns.js. */
+  seedLifePattern(patternName = 'random') {
+    if (!this.initialized) return;
+    const pattern = LIFE_PATTERNS[patternName] ?? LIFE_PATTERNS.random;
+    if (patternName === 'random' || pattern.cells.length === 0) {
+      this.resetToSeed(Math.random() * 10000);
+      return;
+    }
+
+    const gl = this.gl;
+    const isFloat = this.textureType === gl.FLOAT;
+    const scale = isFloat ? 1 : 255;
+    const data = isFloat
+      ? new Float32Array(this.width * this.height * 4)
+      : new Uint8Array(this.width * this.height * 4);
+
+    for (let i = 0; i < this.width * this.height; i++) data[i * 4 + 3] = scale;
+
+    const bounds = pattern.cells.reduce((acc, [x, y]) => ({
+      maxX: Math.max(acc.maxX, x),
+      maxY: Math.max(acc.maxY, y)
+    }), { maxX: 0, maxY: 0 });
+
+    const stamps = [
+      { x: Math.floor(this.width * 0.5 - bounds.maxX * 0.5), y: Math.floor(this.height * 0.5 - bounds.maxY * 0.5) },
+      { x: Math.floor(this.width * 0.25), y: Math.floor(this.height * 0.30) },
+      { x: Math.floor(this.width * 0.70), y: Math.floor(this.height * 0.62) }
+    ];
+
+    for (const stamp of stamps) {
+      for (const [dx, dy] of pattern.cells) {
+        const x = ((stamp.x + dx) % this.width + this.width) % this.width;
+        const y = ((stamp.y + dy) % this.height + this.height) % this.height;
+        const idx = (y * this.width + x) * 4;
+        data[idx] = scale;
+        data[idx + 1] = scale;
+        data[idx + 2] = 0;
+      }
+    }
+
+    for (let i = 0; i < 2; i++) {
+      gl.bindTexture(gl.TEXTURE_2D, this.textures[i]);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, this.width, this.height, gl.RGBA, this.textureType, data);
+    }
+    this.currentBuffer = 0;
+    this._frameCount = 0;
+    eventBus.publish('substrate.life_pattern_seeded', {
+      pattern: patternName,
+      label: pattern.label,
+      rule: this.lifeRule
+    }, { source_layer: 1, priority: 6 });
   }
 
   /** Resize the simulation grid (for adaptive throttling) */
@@ -228,7 +309,7 @@ export class SubstrateEngine {
 
   _compilePrograms() {
     this.programs.gol = this._createProgram(Shaders.VERTEX_QUAD, Shaders.FRAG_GAME_OF_LIFE,
-      ['u_state', 'u_resolution']);
+      ['u_state', 'u_resolution', 'u_birthMask', 'u_survivalMask', 'u_decay']);
     this.programs.rd = this._createProgram(Shaders.VERTEX_QUAD, Shaders.FRAG_REACTION_DIFFUSION,
       ['u_state', 'u_resolution', 'u_feed', 'u_kill', 'u_diffU', 'u_diffV', 'u_dt']);
     this.programs.particles = this._createProgram(Shaders.VERTEX_QUAD, Shaders.FRAG_PARTICLE_UPDATE,
@@ -270,6 +351,7 @@ export class SubstrateEngine {
     const gl = this.gl;
     const internalFormat = this.hasFloat ? gl.RGBA32F : gl.RGBA8;
     const type = this.hasFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+    this.textureType = type;
 
     for (let i = 0; i < 2; i++) {
       const tex = gl.createTexture();
@@ -321,22 +403,29 @@ export class SubstrateEngine {
   _injectEnergyAtPixel(cx, cy, amount, radius) {
     const gl = this.gl;
     const size = radius * 2;
-    const data = new Float32Array(size * size * 4);
+    const isFloat = this.textureType === gl.FLOAT;
+    const scale = isFloat ? 1 : 255;
+    const data = isFloat ? new Float32Array(size * size * 4) : new Uint8Array(size * size * 4);
     for (let dy = 0; dy < size; dy++) {
       for (let dx = 0; dx < size; dx++) {
+        const idx = (dy * size + dx) * 4;
         const dist = Math.sqrt((dx - radius) ** 2 + (dy - radius) ** 2);
         if (dist < radius) {
-          const idx = (dy * size + dx) * 4;
-          const intensity = (1.0 - dist / radius) * amount / 100;
+          const intensity = Math.min(1, (1.0 - dist / radius) * amount / 100);
           data[idx] = intensity;
           data[idx + 1] = intensity * 0.5;
+          if (!isFloat) {
+            data[idx] = Math.floor(intensity * scale);
+            data[idx + 1] = Math.floor(intensity * 0.5 * scale);
+          }
         }
+        data[idx + 3] = scale;
       }
     }
     gl.bindTexture(gl.TEXTURE_2D, this.textures[this.currentBuffer]);
     const px = Math.floor(cx - radius);
     const py = Math.floor(cy - radius);
-    gl.texSubImage2D(gl.TEXTURE_2D, 0, Math.max(0, px), Math.max(0, py), size, size, gl.RGBA, gl.FLOAT, data);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, Math.max(0, px), Math.max(0, py), size, size, gl.RGBA, this.textureType, data);
   }
 
   destroy() {
@@ -346,7 +435,9 @@ export class SubstrateEngine {
 
   serialize() {
     return { mode: this.mode, feedRate: this.feedRate, killRate: this.killRate,
-      diffU: this.diffU, diffV: this.diffV, dt: this.dt, width: this.width, height: this.height };
+      diffU: this.diffU, diffV: this.diffV, dt: this.dt, width: this.width, height: this.height,
+      lifeRule: this.lifeRule, birthMask: this.birthMask, survivalMask: this.survivalMask,
+      lifeDecay: this.lifeDecay };
   }
 
   deserialize(state) {
@@ -356,6 +447,11 @@ export class SubstrateEngine {
     this.killRate = state.killRate ?? 0.06;
     this.diffU = state.diffU ?? 0.21;
     this.diffV = state.diffV ?? 0.105;
+    this.dt = state.dt ?? 1.0;
+    this.lifeRule = state.lifeRule ?? 'B3/S23';
+    this.birthMask = state.birthMask ?? (1 << 3);
+    this.survivalMask = state.survivalMask ?? ((1 << 2) | (1 << 3));
+    this.lifeDecay = state.lifeDecay ?? 0.05;
   }
 }
 
