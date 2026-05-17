@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/genesis/',
+  base: './',
   build: {
     outDir: 'dist',
     sourcemap: true,
